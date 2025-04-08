@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Universal Tier List</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f4f4;
+      padding: 20px;
+      text-align: center;
+    }
+
+    h1, h2 {
+      margin-bottom: 20px;
+    }
+
+    .search-box {
+      margin-bottom: 20px;
+    }
+
+    input[type="text"] {
+      padding: 10px;
+      width: 300px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+    }
+
+    button {
+      padding: 10px 20px;
+      background-color: #333;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    #tier-list {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      margin: 30px 0;
+    }
+
+    .tier {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 100px;
+      background: white;
+      border-left: 10px solid #333;
+      padding: 10px;
+      border-radius: 8px;
+      overflow-x: auto;
+      transition: background 0.2s ease;
+    }
+
+    .tier[data-tier="S"] { border-color: #e6194b; }
+    .tier[data-tier="A"] { border-color: #f58231; }
+    .tier[data-tier="B"] { border-color: #ffe119; }
+    .tier[data-tier="C"] { border-color: #3cb44b; }
+    .tier[data-tier="D"] { border-color: #4363d8; }
+
+    .label {
+      font-weight: bold;
+      width: 30px;
+      font-size: 20px;
+    }
+    .card {
+    background: #fff;
+    padding: 5px;
+    margin: 5px;
+    border-radius: 8px;
+    cursor: grab;
+    width: 60px;
+    text-align: center;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+    .card img {
+      width: 100%;
+      height: auto;
+      border-radius: 4px;
+    }
+
+    .card p {
+      font-size: 14px;
+      margin: 5px 0 0;
+    }
+
+    #cartoon-pool {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Universal Show Tier List</h1>
+  <h2>Search Results</h2>
+  <div id="cartoon-pool"></div>
+
+
+  <div class="search-box">
+    <input type="text" id="search-input" placeholder="Search for any show, movie, anime, etc..." />
+    <button id="search-button">Search</button>
+  </div>
+
+  <div id="tier-list">
+    <div class="tier" data-tier="S"><span class="label">S</span></div>
+    <div class="tier" data-tier="A"><span class="label">A</span></div>
+    <div class="tier" data-tier="B"><span class="label">B</span></div>
+    <div class="tier" data-tier="C"><span class="label">C</span></div>
+    <div class="tier" data-tier="D"><span class="label">D</span></div>
+  </div>
+
+
+  <script>
+    // I know i shouldn't hardcode the API key, but this is just a demo.
+    // i just want to see world crash and burn
+    const OMDB_API_KEY = "a51c27b8";
+    const pool = document.getElementById("cartoon-pool");
+    const tiers = document.querySelectorAll(".tier");
+    const searchBtn = document.getElementById("search-button");
+    const searchInput = document.getElementById("search-input");
+
+    window.onload = () => {
+      const saved = JSON.parse(localStorage.getItem("tierList"));
+      if (saved) {
+        Object.entries(saved).forEach(([tierName, items]) => {
+          const tier = document.querySelector(`.tier[data-tier="${tierName}"]`);
+          items.forEach(({ title, poster }) => {
+            const card = createCard(title, poster);
+            tier.appendChild(card);
+          });
+        });
+      }
+    };
+
+    function saveTierList() {
+      const saved = {};
+      tiers.forEach(tier => {
+        const tierName = tier.dataset.tier;
+        const cards = tier.querySelectorAll(".card");
+        saved[tierName] = Array.from(cards).map(card => ({
+          title: card.dataset.title,
+          poster: card.querySelector("img").src
+        }));
+      });
+      localStorage.setItem("tierList", JSON.stringify(saved));
+    }
+
+    function createCard(title, poster) {
+      const card = document.createElement("div");
+      card.className = "card";
+      card.draggable = true;
+      card.dataset.title = title;
+      card.innerHTML = `
+        <img src="${poster}" alt="${title}" />
+        <p>${title}</p>
+      `;
+      addDragEvents(card);
+      return card;
+    }
+
+    function addDragEvents(card) {
+      card.addEventListener("dragstart", (e) => {
+        e.dataTransfer.setData("text/html", card.outerHTML);
+        card.classList.add("dragging");
+        setTimeout(() => card.remove(), 0);
+      });
+    }
+
+    tiers.forEach(tier => {
+      tier.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        tier.style.background = "#f0f0f0";
+      });
+
+      tier.addEventListener("dragleave", () => {
+        tier.style.background = "white";
+      });
+
+      tier.addEventListener("drop", (e) => {
+        e.preventDefault();
+        tier.style.background = "white";
+        const data = e.dataTransfer.getData("text/html");
+        const wrapper = document.createElement("div");
+        wrapper.innerHTML = data;
+        const card = wrapper.firstChild;
+        addDragEvents(card);
+        tier.appendChild(card);
+        saveTierList();
+      });
+    });
+
+    searchBtn.addEventListener("click", () => {
+      const query = searchInput.value.trim();
+      if (!query) return;
+
+      pool.innerHTML = "<p>Loading...</p>";
+
+      fetch(`https://www.omdbapi.com/?s=${encodeURIComponent(query)}&apikey=${OMDB_API_KEY}`)
+        .then(res => res.json())
+        .then(data => {
+          pool.innerHTML = "";
+          if (!data.Search || data.Search.length === 0) {
+            pool.innerHTML = "<p>No results found.</p>";
+            return;
+          }
+
+          data.Search.forEach(item => {
+            const card = createCard(item.Title, item.Poster !== "N/A" ? item.Poster : "https://via.placeholder.com/120x160?text=No+Image");
+            pool.appendChild(card);
+          });
+        })
+        .catch(err => {
+          pool.innerHTML = "<p>Error fetching data.</p>";
+          console.error(err);
+        });
+    });
+  </script>
+</body>
+</html>
